@@ -101,7 +101,7 @@ def inference_small(x,
     c['fc_units_out'] = num_classes
     c['num_blocks'] = num_blocks
     c['num_classes'] = num_classes
-    inference_small_config(x, c)
+    return inference_small_config(x, c)
 
 def inference_small_config(x, c):
     c['bottleneck'] = False
