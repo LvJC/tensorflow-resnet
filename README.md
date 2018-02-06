@@ -1,3 +1,7 @@
+# Update on 2/6/2018
+
+Since the original version < 1.0, `bn` function in `resnet.py` can't be used before, now fix it.
+
 # ResNet in TensorFlow
 
 Implemenation of [Deep Residual Learning for Image
