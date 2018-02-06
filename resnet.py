@@ -223,52 +223,56 @@ def block(x, c):
 
     return activation(x + shortcut)
 
-
+## this bn function is proved to be suitable.
 def bn(x, c):
     x_shape = x.get_shape()
     params_shape = x_shape[-1:]
-
     if c['use_bias']:
         bias = _get_variable('bias', params_shape,
                              initializer=tf.zeros_initializer)
         return x + bias
 
+    def bn_train():
+        batch_mean, batch_var = tf.nn.moments(x, axes=[0, 1, 2])
+        train_mean = tf.assign(
+            pop_mean, pop_mean * BN_DECAY + batch_mean * (1 - BN_DECAY))
+        train_var = tf.assign(
+            pop_var, pop_var * BN_DECAY + batch_var * (1 - BN_DECAY))
+        with tf.control_dependencies([train_mean, train_var]):
+            return tf.nn.batch_normalization(
+                x, batch_mean, batch_var, beta, gamma, BN_EPSILON)
 
-    axis = list(range(len(x_shape) - 1))
+    def bn_inference():
+        return tf.nn.batch_normalization(
+            x, pop_mean, pop_var, beta, gamma, BN_EPSILON)
 
-    beta = _get_variable('beta',
-                         params_shape,
-                         initializer=tf.zeros_initializer)
-    gamma = _get_variable('gamma',
-                          params_shape,
-                          initializer=tf.ones_initializer)
+    dim = x.get_shape().as_list()[-1]
+    beta = tf.get_variable(
+        name='beta',
+        shape=[dim],
+        dtype=tf.float32,
+        initializer=tf.truncated_normal_initializer(stddev=0.0)
+        )
+    gamma = tf.get_variable(
+        name='gamma',
+        shape=[dim],
+        dtype=tf.float32,
+        initializer=tf.truncated_normal_initializer(stddev=0.1)
+        )
+    pop_mean = tf.get_variable(
+        name='moving_mean',
+        shape=[dim],
+        dtype=tf.float32,
+        initializer=tf.constant_initializer(0.0),
+        trainable=False)
+    pop_var = tf.get_variable(
+        name='moving_variance',
+        shape=[dim],
+        dtype=tf.float32,
+        initializer=tf.constant_initializer(1.0),
+        trainable=False)
+    return tf.cond(c['is_training'], bn_train, bn_inference)
 
-    moving_mean = _get_variable('moving_mean',
-                                params_shape,
-                                initializer=tf.zeros_initializer,
-                                trainable=False)
-    moving_variance = _get_variable('moving_variance',
-                                    params_shape,
-                                    initializer=tf.ones_initializer,
-                                    trainable=False)
-
-    # These ops will only be preformed when training.
-    mean, variance = tf.nn.moments(x, axis)
-    update_moving_mean = moving_averages.assign_moving_average(moving_mean,
-                                                               mean, BN_DECAY)
-    update_moving_variance = moving_averages.assign_moving_average(
-        moving_variance, variance, BN_DECAY)
-    tf.add_to_collection(UPDATE_OPS_COLLECTION, update_moving_mean)
-    tf.add_to_collection(UPDATE_OPS_COLLECTION, update_moving_variance)
-
-    mean, variance = control_flow_ops.cond(
-        c['is_training'], lambda: (mean, variance),
-        lambda: (moving_mean, moving_variance))
-
-    x = tf.nn.batch_normalization(x, mean, variance, beta, gamma, BN_EPSILON)
-    #x.set_shape(inputs.get_shape()) ??
-
-    return x
 
 
 def fc(x, c):
